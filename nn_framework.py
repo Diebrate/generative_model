@@ -1651,3 +1651,4 @@ class NeuralNetwork2D(nn.Module):
 
     def forward(self, x):
         return self.flow(x.float())
+

@@ -36,3 +36,12 @@ pick = 6
 z = x[labels == 6]
 
 gen = nn_framework.NeuralNetwork2D(1, 1, 10, n_layers=50)
+
+n_iter = 1000
+n_sample = 100
+
+l = torch.tensor(0)
+for n in range(n_iter):
+    ind = np.random.choice(np.arange(z.shape[0]), size=n_sample)
+    z0 = z[ind]
+    # cost matrix
