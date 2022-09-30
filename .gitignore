@@ -15,3 +15,5 @@ data/CIFAR10/cifar-10-batches-py/data_batch_1
 data/CIFAR10/cifar-10-batches-py/batches.meta
 *.pyc
 *.bak
+*.txt
+*.jpg
