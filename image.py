@@ -27,3 +27,14 @@ else:
     data = load(path, download=True, transform=transform)
 
 dataloader = torch.utils.data.DataLoader(data)
+
+data_id1 = torch.utils.data.Subset(data, (data.identity[:, 0] == 1).nonzero(as_tuple=True)[0])
+dataloader_id1 = torch.utils.data.DataLoader(data_id1)
+
+df_sub = []
+for ind, samp in enumerate(dataloader_id1):
+    df_sub.append(samp[0])
+    # plt.imshow(samp[0][0].numpy().transpose((1, 2, 0)))
+
+df_sub = torch.cat(df_sub)
+plt.imshow(torchvision.utils.make_grid(df_sub).numpy().transpose(1, 2, 0))
