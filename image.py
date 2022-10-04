@@ -61,4 +61,4 @@ m = torch.distributions.normal.Normal(0., 1.)
 obj = []
 
 for n in range(n_iter):
-    1
+
