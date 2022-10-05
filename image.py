@@ -42,23 +42,57 @@ plt.imshow(torchvision.utils.make_grid(df_sub).numpy().transpose(1, 2, 0))
 
 d = df_sub.shape[0]
 
-n_iter = 500
+n_iter = 1000
 
 reg = 0.01
-reg_phi = 10
+reg_phi = 0.5
+n_layers = 2
+d_hid = 3
 
-gen = nn_framework.NeuralNetwork2D(3, 3, 100, n_layers=4)
-opt_gen = torch.optim.Adam(gen.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+gen = nn_framework.NeuralNetwork2D(3 * d, 3, d_hid, n_layers=n_layers)
+# opt_gen = torch.optim.Adam(gen.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
-err_ent = nn_framework.NeuralVol2D(3, 3, 100, n_layers=4)
-opt_ent = torch.optim.Adam(err_ent.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+err_ent = nn_framework.NeuralVol2D(3, 3, d_hid, n_layers=n_layers)
+# opt_ent = torch.optim.Adam(err_ent.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
-err_kl = nn_framework.NeuralVol2D(3, 3, 100, n_layers=4)
-opt_kl = torch.optim.Adam(err_kl.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+err_kl = nn_framework.NeuralVol2D(3 * d, 3 * d, d_hid, n_layers=n_layers)
+# opt_kl = torch.optim.Adam(err_kl.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+
+opt = torch.optim.Adam(list(gen.parameters()) + list(err_ent.parameters()) + list(err_kl.parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
 m = torch.distributions.normal.Normal(0., 1.)
 
 obj = []
+t_step = 10
+dt = 1 / t_step
 
 for n in range(n_iter):
+    l = torch.tensor(0.)
+    joint = df_sub.flatten(start_dim=0, end_dim=1)
+    joint = joint.unsqueeze(0)
+    for it in range(t_step):
+        out_kl = nn.functional.relu(err_kl(joint))
+        joint = joint + out_kl * m.sample(joint.shape) * np.sqrt(dt)
+        l = l + reg_phi * out_kl.pow(2).mean() * dt
+    z = gen(joint)
+    for it in range(t_step):
+        out = reg * err_ent(z).abs() / (1 + err_ent(z).abs())
+        z = z + out * m.sample(z.shape) * np.sqrt(dt)
+        l = l - reg * out.pow(2).mean() * dt
+    l = l + (joint - torch.tile(z, dims=[1, d, 1, 1])).pow(2).mean()
+    # opt_kl.zero_grad()
+    # opt_gen.zero_grad()
+    # opt_ent.zero_grad()
+    opt.zero_grad()
+    l.backward()
+    # opt_kl.step()
+    # opt_gen.step()
+    # opt_ent.step()
+    opt.step()
+    obj.append(float(l))
+    print('obj = {0:0.5f} at iteration {1:n}'.format(float(obj[-1]), n))
+
+bn = transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+plt.figure()
+plt.imshow(bn(z).squeeze(0).detach().numpy().transpose(1,2,0))
 
