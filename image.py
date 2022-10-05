@@ -28,7 +28,7 @@ else:
 
 dataloader = torch.utils.data.DataLoader(data)
 
-celeb_id = data.identity.unique()[666]
+celeb_id = data.identity.unique()[345]
 data_sub = torch.utils.data.Subset(data, (data.identity[:, 0] == celeb_id).nonzero(as_tuple=True)[0])
 dataloader_sub = torch.utils.data.DataLoader(data_sub)
 
@@ -44,7 +44,7 @@ d = df_sub.shape[0]
 
 n_iter = 1000
 
-reg = 0.01
+reg = 0.001
 reg_phi = 0.5
 n_layers = 2
 d_hid = 3
