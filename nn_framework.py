@@ -1646,7 +1646,7 @@ class NeuralNetwork2D(nn.Module):
             if n % 4 == 0:
                 layers.append(nn.BatchNorm2d(d_hid))
         layers.append(nn.Conv2d(d_hid, d_out, kernel_size=3, padding='same'))
-        layers.append(nn.BatchNorm2d(d_out))
+        # layers.append(nn.BatchNorm2d(d_out))
         self.flow = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -1658,14 +1658,14 @@ class NeuralVol2D(nn.Module):
     def __init__(self, d_in, d_out, d_hid, n_layers=20):
         super().__init__()
         layers = []
-        layers.append(nn.Conv2d(d_in, d_hid, kernel_size=1, padding='same'))
+        layers.append(nn.Conv2d(d_in, d_hid, kernel_size=3, padding='same'))
         layers.append(nn.ReLU())
-        layers.append(nn.BatchNorm2d(d_hid))
+        # layers.append(nn.BatchNorm2d(d_hid))
         for n in range(n_layers):
             layers.append(nn.Conv2d(d_hid, d_hid, 3, padding='same'))
             layers.append(nn.ReLU())
-            if n % 4 == 0:
-                layers.append(nn.BatchNorm2d(d_hid))
+            # if n % 4 == 0:
+            #     layers.append(nn.BatchNorm2d(d_hid))
         layers.append(nn.Conv2d(d_hid, d_out, kernel_size=3, padding='same'))
         self.flow = nn.Sequential(*layers)
 

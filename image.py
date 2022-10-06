@@ -10,6 +10,9 @@ import torchvision.transforms as transforms
 
 import nn_framework
 
+import time
+start = time.time()
+
 data = 'CelebA'
 path = 'data/' + data
 load = getattr(torchvision.datasets, data)
@@ -28,7 +31,7 @@ else:
 
 dataloader = torch.utils.data.DataLoader(data)
 
-celeb_id = data.identity.unique()[345]
+celeb_id = data.identity.unique()[999]
 data_sub = torch.utils.data.Subset(data, (data.identity[:, 0] == celeb_id).nonzero(as_tuple=True)[0])
 dataloader_sub = torch.utils.data.DataLoader(data_sub)
 
@@ -42,12 +45,12 @@ plt.imshow(torchvision.utils.make_grid(df_sub).numpy().transpose(1, 2, 0))
 
 d = df_sub.shape[0]
 
-n_iter = 1000
+n_iter = 250
 
-reg = 0.001
-reg_phi = 0.5
-n_layers = 2
-d_hid = 3
+reg = 1
+reg_phi = 0.00001
+n_layers = 3
+d_hid = 8
 
 gen = nn_framework.NeuralNetwork2D(3 * d, 3, d_hid, n_layers=n_layers)
 # opt_gen = torch.optim.Adam(gen.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
@@ -61,6 +64,7 @@ err_kl = nn_framework.NeuralVol2D(3 * d, 3 * d, d_hid, n_layers=n_layers)
 opt = torch.optim.Adam(list(gen.parameters()) + list(err_ent.parameters()) + list(err_kl.parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
 m = torch.distributions.normal.Normal(0., 1.)
+bn = transforms.Normalize((0., 0., 0.), (1., 1., 1.))
 
 obj = []
 t_step = 10
@@ -92,7 +96,8 @@ for n in range(n_iter):
     obj.append(float(l))
     print('obj = {0:0.5f} at iteration {1:n}'.format(float(obj[-1]), n))
 
-bn = transforms.Normalize((0., 0., 0.), (1., 1., 1.))
 plt.figure()
 plt.imshow(bn(z).squeeze(0).detach().numpy().transpose(1,2,0))
+
+print('-----process takes {:0.6f} seconds-----'.format(time.time() - start))
 
