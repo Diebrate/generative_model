@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import os
+import sys
 
 import torch
 from torch import nn
@@ -31,7 +32,13 @@ else:
 
 dataloader = torch.utils.data.DataLoader(data)
 
-celeb_id = data.identity.unique()[999]
+use_sys = True
+if use_sys:
+    person_id = int(sys.argv[1])
+else:
+    person_id = 123
+
+celeb_id = data.identity.unique()[person_id]
 data_sub = torch.utils.data.Subset(data, (data.identity[:, 0] == celeb_id).nonzero(as_tuple=True)[0])
 dataloader_sub = torch.utils.data.DataLoader(data_sub)
 
@@ -42,14 +49,15 @@ for ind, samp in enumerate(dataloader_sub):
 
 df_sub = torch.cat(df_sub)
 plt.imshow(torchvision.utils.make_grid(df_sub).numpy().transpose(1, 2, 0))
+plt.savefig('image/true_' + str(person_id) + '.png')
 
 d = df_sub.shape[0]
 
-n_iter = 250
+n_iter = 5000
 
-reg = 1
-reg_phi = 0.00001
-n_layers = 3
+reg = 0.001
+reg_phi = 0.001
+n_layers = 4
 d_hid = 8
 
 gen = nn_framework.NeuralNetwork2D(3 * d, 3, d_hid, n_layers=n_layers)
@@ -98,6 +106,7 @@ for n in range(n_iter):
 
 plt.figure()
 plt.imshow(bn(z).squeeze(0).detach().numpy().transpose(1,2,0))
+plt.savefig('image/sim_n' + str(n_iter) + '_' + str(person_id) + '.png')
 
 print('-----process takes {:0.6f} seconds-----'.format(time.time() - start))
 
