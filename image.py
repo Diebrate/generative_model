@@ -32,11 +32,11 @@ else:
 
 dataloader = torch.utils.data.DataLoader(data)
 
-use_sys = True
+use_sys = False
 if use_sys:
     person_id = int(sys.argv[1])
 else:
-    person_id = 123
+    person_id = 999
 
 celeb_id = data.identity.unique()[person_id]
 data_sub = torch.utils.data.Subset(data, (data.identity[:, 0] == celeb_id).nonzero(as_tuple=True)[0])
@@ -49,64 +49,102 @@ for ind, samp in enumerate(dataloader_sub):
 
 df_sub = torch.cat(df_sub)
 plt.imshow(torchvision.utils.make_grid(df_sub).numpy().transpose(1, 2, 0))
-plt.savefig('image/true_' + str(person_id) + '.png')
+# plt.savefig('image/true_' + str(person_id) + '.png')
 
-d = df_sub.shape[0]
+d_max = df_sub.shape[0]
 
-n_iter = 5000
+d = d_max
 
-reg = 0.001
-reg_phi = 0.001
+n_iter = 250
+
+reg = 1e-5
+reg_phi = 1e-2
 n_layers = 4
-d_hid = 8
-
-gen = nn_framework.NeuralNetwork2D(3 * d, 3, d_hid, n_layers=n_layers)
-# opt_gen = torch.optim.Adam(gen.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
-
-err_ent = nn_framework.NeuralVol2D(3, 3, d_hid, n_layers=n_layers)
-# opt_ent = torch.optim.Adam(err_ent.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
-
-err_kl = nn_framework.NeuralVol2D(3 * d, 3 * d, d_hid, n_layers=n_layers)
-# opt_kl = torch.optim.Adam(err_kl.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
-
-opt = torch.optim.Adam(list(gen.parameters()) + list(err_ent.parameters()) + list(err_kl.parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
-
-m = torch.distributions.normal.Normal(0., 1.)
-bn = transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+d_hid = 3
 
 obj = []
-t_step = 10
+t_step = 16
 dt = 1 / t_step
+sd = 1
 
-for n in range(n_iter):
-    l = torch.tensor(0.)
-    joint = df_sub.flatten(start_dim=0, end_dim=1)
-    joint = joint.unsqueeze(0)
-    for it in range(t_step):
-        out_kl = nn.functional.relu(err_kl(joint))
-        joint = joint + out_kl * m.sample(joint.shape) * np.sqrt(dt)
-        l = l + reg_phi * out_kl.pow(2).mean() * dt
-    z = gen(joint)
-    for it in range(t_step):
-        out = reg * err_ent(z).abs() / (1 + err_ent(z).abs())
-        z = z + out * m.sample(z.shape) * np.sqrt(dt)
-        l = l - reg * out.pow(2).mean() * dt
-    l = l + (joint - torch.tile(z, dims=[1, d, 1, 1])).pow(2).mean()
-    # opt_kl.zero_grad()
-    # opt_gen.zero_grad()
-    # opt_ent.zero_grad()
-    opt.zero_grad()
-    l.backward()
-    # opt_kl.step()
-    # opt_gen.step()
-    # opt_ent.step()
-    opt.step()
-    obj.append(float(l))
-    print('obj = {0:0.5f} at iteration {1:n}'.format(float(obj[-1]), n))
+m = torch.distributions.normal.Normal(0., sd)
+bn = transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+
+comp_joint = False
+
+if comp_joint:
+
+    gen = nn_framework.NeuralNetwork2D(3 * d, 3, d_hid, n_layers=n_layers)
+
+    err_ent = nn_framework.NeuralVol2D(3, 3, d_hid, n_layers=n_layers)
+
+    err_kl = nn_framework.NeuralNetwork2D(3 * d, 3 * d, d_hid, n_layers=n_layers)
+
+    opt = torch.optim.Adam(list(gen.parameters()) + list(err_ent.parameters()) + list(err_kl.parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+
+    for n in range(n_iter):
+        l = torch.tensor(0.)
+        if d == d_max:
+            joint = df_sub.flatten(start_dim=0, end_dim=1)
+        else:
+            joint = df_sub[np.random.choice(np.arange(d_max), replace=True, size=d)].flatten(start_dim=0, end_dim=1)
+        joint = joint.unsqueeze(0)
+        for it in range(t_step):
+            out_kl = err_kl(joint)
+            joint = joint + out_kl * dt
+            l = l + reg_phi * out_kl.pow(2).mean() * dt
+        z = gen(joint)
+        for it in range(t_step):
+            out = reg * torch.sigmoid(err_ent(z))
+            z = z + out * m.sample(z.shape) * np.sqrt(dt)
+            l = l - reg * out.pow(2).mean() * dt
+        l = l + (joint - torch.tile(z, dims=[1, d, 1, 1])).pow(2).mean()
+        opt.zero_grad()
+        l.backward()
+        opt.step()
+        obj.append(float(l))
+        print('obj = {0:0.5f} at iteration {1:n}'.format(float(obj[-1]), n))
+
+else:
+
+    gen = nn_framework.NeuralNetwork2D(3, 3, d_hid, n_layers=n_layers)
+
+    err_ent = nn_framework.NeuralVol2D(3, 3, d_hid, n_layers=n_layers)
+
+    err_kl = nn_framework.NeuralNetwork2D(3 * d, 3 * d, d_hid, n_layers=n_layers)
+
+    opt = torch.optim.Adam(list(gen.parameters()) + list(err_ent.parameters()) + list(err_kl.parameters()), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+
+    m_noise = torch.distributions.uniform.Uniform(0, 1)
+    noise_dim = torch.tensor(df_sub.shape)
+    noise_dim[0] = 1
+    for n in range(n_iter):
+        l = torch.tensor(0.)
+        if d == d_max:
+            joint = df_sub.flatten(start_dim=0, end_dim=1)
+        else:
+            joint = df_sub[np.random.choice(np.arange(d_max), replace=True, size=d)].flatten(start_dim=0, end_dim=1)
+        joint = joint.unsqueeze(0)
+        for it in range(t_step):
+            out_kl = err_kl(joint)
+            joint = joint + out_kl * dt
+            l = l + reg_phi * out_kl.pow(2).mean() * dt
+        noise = m_noise.sample(noise_dim)
+        z = gen(noise)
+        for it in range(t_step):
+            out = reg * torch.sigmoid(err_ent(z))
+            z = z + out * m.sample(z.shape) * np.sqrt(dt)
+            l = l - reg * out.pow(2).mean() * dt
+        l = l + (joint - torch.tile(z, dims=[1, d, 1, 1])).pow(2).mean()
+        opt.zero_grad()
+        l.backward()
+        opt.step()
+        obj.append(float(l))
+        print('obj = {0:0.5f} at iteration {1:n}'.format(float(obj[-1]), n))
 
 plt.figure()
-plt.imshow(bn(z).squeeze(0).detach().numpy().transpose(1,2,0))
-plt.savefig('image/sim_n' + str(n_iter) + '_' + str(person_id) + '.png')
+plt.imshow(z.squeeze(0).detach().numpy().transpose(1,2,0))
+# plt.savefig('image/sim_n' + str(n_iter) + '_' + str(person_id) + '.png')
 
 print('-----process takes {:0.6f} seconds-----'.format(time.time() - start))
 
