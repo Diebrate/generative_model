@@ -1667,6 +1667,7 @@ class NeuralVol2D(nn.Module):
             # if n % 4 == 0:
             #     layers.append(nn.BatchNorm2d(d_hid))
         layers.append(nn.Conv2d(d_hid, d_out, kernel_size=3, padding='same'))
+        # layers.append(nn.Sigmoid())
         self.flow = nn.Sequential(*layers)
 
     def forward(self, x):
