@@ -1643,9 +1643,10 @@ class NeuralNetwork2D(nn.Module):
         for n in range(n_layers):
             layers.append(nn.Conv2d(d_hid, d_hid, 3, padding='same'))
             layers.append(nn.ReLU())
-            if n % 4 == 0:
+            if n % 4 == 0 and n > 0:
                 layers.append(nn.BatchNorm2d(d_hid))
         layers.append(nn.Conv2d(d_hid, d_out, kernel_size=3, padding='same'))
+        # layers.append(nn.Conv2d(d_hid, d_out, kernel_size=3, padding='valid'))
         # layers.append(nn.BatchNorm2d(d_out))
         self.flow = nn.Sequential(*layers)
 
@@ -1673,3 +1674,92 @@ class NeuralVol2D(nn.Module):
     def forward(self, x):
         return self.flow(x.float())
 
+
+class View(nn.Module):
+
+    def __init__(self, shape):
+        super(View, self).__init__()
+        self.shape = shape
+
+    def forward(self, x):
+        return x.view(*self.shape)
+
+
+class NeuralEncoder(nn.Module):
+
+    def __init__(self, d_in, d_out, d_hid, n_layers=20):
+        super().__init__()
+        layers = []
+        layers.append(nn.Conv2d(d_in, d_hid, kernel_size=8, padding='same'))
+        layers.append(nn.ReLU())
+        # layers.append(nn.BatchNorm2d(d_hid))
+        for n in range(n_layers):
+            layers.append(nn.Conv2d(d_hid, d_hid, 8, padding='same'))
+            layers.append(nn.ReLU())
+            # if n % 4 == 0:
+            #     layers.append(nn.BatchNorm2d(d_hid))
+        layers.append(nn.AdaptiveAvgPool2d((1, 1)))
+        layers.append(nn.Flatten())
+        layers.append(nn.Linear(d_hid, d_out))
+        # layers.append(nn.Sigmoid())
+        self.flow = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.flow(x.float())
+
+
+class NeuralDecoder(nn.Module):
+
+    def __init__(self, d_in, d_out, d_hid, height, width, n_layers=20):
+        super().__init__()
+        layers = []
+        layers.append(nn.Linear(d_in, d_hid * height * width))
+        layers.append(View((d_hid, height, width)))
+        layers.append(nn.ReLU())
+        # layers.append(nn.BatchNorm2d(d_hid))
+        for n in range(n_layers):
+            layers.append(nn.Conv2d(d_hid, d_hid, 8, padding='same'))
+            layers.append(nn.ReLU())
+            # if n % 4 == 0:
+            #     layers.append(nn.BatchNorm2d(d_hid))
+        layers.append(nn.Conv2d(d_hid, d_out, kernel_size=8, padding='same'))
+        self.flow = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.flow(x.float())
+
+
+class NeuralLinear(nn.Module):
+
+    def __init__(self, d_in, d_out):
+        super().__init__()
+        self.flatten = nn.Flatten()
+        self.flow = nn.Sequential(nn.Linear(d_in, d_out, bias=False))
+
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.flow(x.float())
+
+
+class NeuralFeat(nn.Module):
+
+    def __init__(self, d_in, d_out, d_hid, n_val_layers=20, n_same_layers=20):
+        super().__init__()
+        layers = []
+        layers.append(nn.Conv2d(d_in, d_hid, kernel_size=3, padding='same'))
+        layers.append(nn.ReLU())
+        for n in range(n_val_layers):
+            layers.append(nn.Conv2d(d_hid, d_hid, kernel_size=3, padding='valid'))
+            layers.append(nn.ReLU())
+            if n % 4 == 0 and n > 0:
+                layers.append(nn.BatchNorm2d(d_hid))
+        for n in range(n_same_layers):
+            layers.append(nn.Conv2d(d_hid, d_hid, kernel_size=3, padding='same'))
+            layers.append(nn.ReLU())
+            if n % 4 == 0 and n > 0:
+                layers.append(nn.BatchNorm2d(d_hid))
+        layers.append(nn.Conv2d(d_hid, d_out, kernel_size=3, padding='same'))
+        self.flow = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.flow(x.float())
