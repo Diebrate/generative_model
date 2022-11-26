@@ -17,7 +17,6 @@ start = time.time()
 torch.cuda.empty_cache()
 
 import gc
-gc.collect()
 
 torch.manual_seed(12345)
 np.random.seed(12345)
@@ -48,6 +47,8 @@ else:
     person_id = 999
     use_gpu = True
 
+person_id2 = 666
+
 if use_gpu:
     cuda = torch.device('cuda')
 
@@ -55,46 +56,82 @@ celeb_id = data.identity.unique()[person_id]
 data_sub = torch.utils.data.Subset(data, (data.identity[:, 0] == celeb_id).nonzero(as_tuple=True)[0])
 dataloader_sub = torch.utils.data.DataLoader(data_sub)
 
-df_sub = []
+celeb_id2 = data.identity.unique()[person_id2]
+data_sub2 = torch.utils.data.Subset(data, (data.identity[:, 0] == celeb_id2).nonzero(as_tuple=True)[0])
+dataloader_sub2 = torch.utils.data.DataLoader(data_sub2)
+
+df_all = []
 for ind, samp in enumerate(dataloader_sub):
-    df_sub.append(samp[0])
+    df_all.append(samp[0])
     # plt.imshow(samp[0][0].numpy().transpose((1, 2, 0)))
 
-df_sub = torch.cat(df_sub)
+df_all = torch.cat(df_all)
+
+df_all2 = []
+for ind, samp in enumerate(dataloader_sub2):
+    df_all2.append(samp[0])
+    # plt.imshow(samp[0][0].numpy().transpose((1, 2, 0)))
+
+df_all2 = torch.cat(df_all2)
 
 if use_gpu:
-    df_sub = df_sub.cuda()
+    df_all = df_all.cuda()
+    df_all2 = df_all2.cuda()
 
-# plt.imshow(torchvision.utils.make_grid(df_sub).numpy().transpose(1, 2, 0))
+# plt.imshow(torchvision.utils.make_grid(df_all).numpy().transpose(1, 2, 0))
 # plt.savefig('image/true_' + str(person_id) + '.png')
 
-d_max = df_sub.shape[0]
+# clear data
+
+df_all = torch.concat((df_all, df_all2), dim=0)
+df_all = df_all[np.random.choice(np.arange(df_all.shape[0]), replace=False, size=20)]
+
+d_max = df_all.shape[0]
 
 d = d_max
 
-n_iter = 150
+n_train = int(d_max * 0.7)
+n_test = d_max - n_train
+
+ind_mix = np.random.choice(np.arange(d_max), size=d_max, replace=False)
+df_sub = df_all[ind_mix[:n_train]]
+df_test = df_all[ind_mix[n_train:]]
+
+n_iter = 250
 
 reg = 1e-4
 reg_phi = 1e-4
-n_layers = 16
-d_hid = 64
-d_feat = 32
+n_layers = 4
+d_hid = 128
+d_feat = 128
 height, width = df_sub[0].shape[1:]
-n_noise = 50 - d
+n_noise = 30 - n_train
 
-n_total = d + n_noise
+n_total = n_train + n_noise
 
 obj = []
 
-# nn_feat = nn_framework.NeuralNetwork2D(d_in=3, d_out=d_feat, d_hid=d_hid, n_layers=n_layers)
-nn_feat = nn_framework.NeuralFeat(d_in=3, d_out=d_feat, d_hid=d_hid, n_val_layers=n_layers, n_same_layers=n_layers)
-nn_lin = nn_framework.NeuralLinear(d_in=d_feat, d_out=1)
+del dataloader_sub, data_sub, celeb_id, dataloader_sub2, data_sub2, celeb_id2, dataloader, data
+gc.collect()
+
+# nn_feat = nn_framework.NeuralFeat(d_in=3, d_out=d_feat, d_hid=d_hid, n_val_layers=n_layers, n_same_layers=n_layers)
+# nn_class = nn.Linear(d_feat, 1, bias=False)
+
+nn_feat = nn_framework.NNconv5_3(d_in=3, d_out=d_feat, d_hid=d_hid)
+nn_class = nn.Conv2d(d_feat, 1, kernel_size=(1, 1), bias=False)
+
+### nn for coord model
+# nn_coord = nn.Conv2d(d_feat, 2, kernel_size=(3, 3), padding='same')
+nn_coord = nn_framework.NNconv5_3(d_in=d_feat, d_out=2, d_hid=d_hid)
+nn_gen = nn_framework.NNconv5_3(d_in=2, d_out=3, d_hid=d_hid, size=1)
 
 if use_gpu:
     nn_feat = nn_feat.cuda()
-    nn_lin = nn_lin.cuda()
+    nn_class = nn_class.cuda()
+    nn_coord = nn_coord.cuda()
+    nn_gen = nn_gen.cuda()
 
-param = list(nn_feat.parameters()) + list(nn_lin.parameters())
+param = list(nn_feat.parameters()) + list(nn_class.parameters()) + list(nn_coord.parameters()) + list(nn_gen.parameters())
 
 opt = torch.optim.Adam(param, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
@@ -104,10 +141,12 @@ opt = torch.optim.Adam(param, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_de
 inp = df_sub.clone()
 
 noise = torch.randn(n_noise, 3, height, width).sigmoid()
+# noise = df_all2[:n_noise].clone()
 
 if use_gpu:
     inp = inp.cuda()
     noise = noise.cuda()
+    df_test = df_test.cuda()
 
 inp = torch.concat((inp, noise), dim=0)
 target = torch.concat((torch.ones(df_sub.shape[0]), torch.zeros(n_noise)), dim=0)
@@ -120,21 +159,48 @@ ind = np.random.permutation(np.arange(n_total))
 inp = inp[ind]
 target = target[ind]
 
+ind_img = np.arange(n_total)[target.cpu() == 1]
+ind_noise = np.arange(n_total)[target.cpu() == 0]
+
 loss = nn.BCELoss()
 
 # pool = nn.AdaptiveAvgPool2d((1, 1), divisor_override=1)
 
-h, w = nn_feat(inp).detach().shape[2:]
-pool = nn.AvgPool2d((h, w))
+# h, w = nn_feat(inp).detach().shape[2:]
+# pool = nn.AvgPool2d((h, w))
+
+gc.collect()
 
 n = 0
 while n < n_iter:
 
-    feat = nn_feat(inp)
-    feat_pool = pool(feat).flatten(start_dim=1)
-    out = torch.sigmoid(nn_lin(feat_pool)).flatten()
+    l = torch.tensor(0.).cuda()
 
-    l = loss(out, target)
+    feat = nn_feat(inp) # size n * d_feat * h * w
+    # feat_pool = pool(feat).flatten(start_dim=1)
+    out_class = nn_class(feat) # size n * 1 * h * w
+    out = out_class.mean(dim=(1, 2, 3)).sigmoid()
+
+    feat_avg = feat.mean(dim=(2, 3))
+
+    l = l + loss(out, target)
+
+    # var model
+
+    feat_pool = feat_avg[ind_img]
+
+    l = l + feat_pool.T.cov().det()
+
+    # feat_pool2 = feat_avg[ind_noise]
+
+    # l = l + feat_pool2.T.cov().det()
+
+    # coord model
+
+    # coord = nn_coord(feat).sigmoid() # size n * 2 * h * w
+    # img_c = nn_gen(coord).sigmoid() # size n * 3 * h * w
+
+    # l = l + ((img_c - inp).pow(2).mean(dim=1) * (out_class.squeeze().sigmoid())).mean()
 
     opt.zero_grad()
     l.backward()
@@ -150,28 +216,62 @@ while n < n_iter:
 
 plt.figure(figsize=(16, 16))
 if use_gpu:
-    plt.imshow(torchvision.utils.make_grid(df_sub).cpu().numpy().transpose(1, 2, 0))
+    plt.imshow(torchvision.utils.make_grid(df_all).cpu().numpy().transpose(1, 2, 0))
 else:
-    plt.imshow(torchvision.utils.make_grid(df_sub).numpy().transpose(1, 2, 0))
+    plt.imshow(torchvision.utils.make_grid(df_all).numpy().transpose(1, 2, 0))
 plt.tight_layout()
 plt.savefig('image/class/true.png')
 
 # plt.figure()
 # plt.imshow(torchvision.utils.make_grid(torch.sigmoid(out)).numpy().transpose(1, 2, 0))
 
-fig, axs = plt.subplots(nrows=5, ncols=10, figsize=(16, 16))
+fig, axs = plt.subplots(nrows=3, ncols=10, figsize=(16, 16))
 
-up = nn.Upsample(size=(height, width))
+# up = nn.Upsample(size=(height, width))
 
 for i in range(n_total):
-    h, w = feat[i].shape[1:]
-    res = feat[i].flatten(start_dim=1).transpose(0, 1)
-    res = nn_lin(res).reshape((h, w)).detach()
-    res = res.unsqueeze(0).unsqueeze(0)
-    res = up(res).squeeze()
+    # res = nn_class(feat[i]).squeeze().detach()
+    res = out_class[i].detach().squeeze()
+    res = (res - res.min()) / (res.max() - res.min())
     if use_gpu:
         res = res.cpu()
     axs[i // 10, i % 10].imshow(res.numpy())
     axs[i // 10, i % 10].axis('off')
 plt.tight_layout()
+plt.savefig('image/class/train.png')
+
+fig_test, axs_test = plt.subplots(ncols=n_test, figsize=(16, 8))
+
+feat_test = nn_feat(df_test) # size n * d_feat * h * w
+out_class_test = nn_class(feat_test) # size n * 1 * h * w
+for i in range(n_test):
+    res_test = out_class_test[i].detach().squeeze()
+    res_test = (res_test - res_test.min()) / (res_test.max() - res_test.min())
+    if use_gpu:
+        res_test = res_test.cpu()
+    axs_test[i].imshow(res_test.numpy())
+    axs_test[i].axis('off')
+plt.tight_layout()
 plt.savefig('image/class/test.png')
+
+ref = np.random.randn(1, 2, height, width)
+for i in range(height):
+    for j in range(width):
+        ref[0][0][i, j] = i / height
+        ref[0][1][i, j] = j / width
+ref = torch.tensor(ref)
+if use_gpu:
+    ref = ref.cuda()
+
+plt.figure()
+center = nn_gen(ref)
+if use_gpu:
+    center = center.cpu()
+plt.imshow(center.detach().squeeze().numpy().transpose(1, 2, 0))
+plt.tight_layout()
+plt.savefig('image/class/center.png')
+
+print(out)
+print(out_class_test.mean(dim=(1, 2, 3)).sigmoid())
+print(target)
+print(float(loss(out, target)))
