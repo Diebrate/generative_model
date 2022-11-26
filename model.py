@@ -117,7 +117,8 @@ gc.collect()
 # nn_feat = nn_framework.NeuralFeat(d_in=3, d_out=d_feat, d_hid=d_hid, n_val_layers=n_layers, n_same_layers=n_layers)
 # nn_class = nn.Linear(d_feat, 1, bias=False)
 
-nn_feat = nn_framework.NNconv5_3(d_in=3, d_out=d_feat, d_hid=d_hid)
+# nn_feat = nn_framework.NNconv5_3(d_in=3, d_out=d_feat, d_hid=d_hid)
+nn_feat = nn_framework.NNvgg()
 nn_class = nn.Conv2d(d_feat, 1, kernel_size=(1, 1), bias=False)
 
 ### nn for coord model
@@ -166,7 +167,7 @@ loss = nn.BCELoss()
 
 # pool = nn.AdaptiveAvgPool2d((1, 1), divisor_override=1)
 
-# h, w = nn_feat(inp).detach().shape[2:]
+h, w = nn_feat(inp).detach().shape[2:]
 # pool = nn.AvgPool2d((h, w))
 
 gc.collect()
@@ -227,12 +228,13 @@ plt.savefig('image/class/true.png')
 
 fig, axs = plt.subplots(nrows=3, ncols=10, figsize=(16, 16))
 
-# up = nn.Upsample(size=(height, width))
+up = nn.Upsample(size=(height, width))
 
 for i in range(n_total):
     # res = nn_class(feat[i]).squeeze().detach()
     res = out_class[i].detach().squeeze()
     res = (res - res.min()) / (res.max() - res.min())
+    res = up(res)
     if use_gpu:
         res = res.cpu()
     axs[i // 10, i % 10].imshow(res.numpy())
@@ -247,6 +249,7 @@ out_class_test = nn_class(feat_test) # size n * 1 * h * w
 for i in range(n_test):
     res_test = out_class_test[i].detach().squeeze()
     res_test = (res_test - res_test.min()) / (res_test.max() - res_test.min())
+    res_test = up(res_test)
     if use_gpu:
         res_test = res_test.cpu()
     axs_test[i].imshow(res_test.numpy())

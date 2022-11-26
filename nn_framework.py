@@ -3076,9 +3076,9 @@ class NNconv5_3(nn.Module):
 
 class NNvgg(nn.Module):
 
-    def __init__(self, d_in, d_out):
+    def __init__(self):
         super().__init__()
-        self.flow = nn.Sequential(nn.Conv2d(d_in, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 0
+        self.flow = nn.Sequential(nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 0
                                   nn.ReLU(inplace=True), # 1
                                   nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 2
                                   nn.ReLU(inplace=False), # 3
