@@ -97,13 +97,13 @@ ind_mix = np.random.choice(np.arange(d_max), size=d_max, replace=False)
 df_sub = df_all[ind_mix[:n_train]]
 df_test = df_all[ind_mix[n_train:]]
 
-n_iter = 250
+n_iter = 500
 
 reg = 1e-4
 reg_phi = 1e-4
 n_layers = 4
-d_hid = 128
-d_feat = 128
+d_hid = 512
+d_feat = 512
 height, width = df_sub[0].shape[1:]
 n_noise = 30 - n_train
 
@@ -118,7 +118,7 @@ gc.collect()
 # nn_class = nn.Linear(d_feat, 1, bias=False)
 
 # nn_feat = nn_framework.NNconv5_3(d_in=3, d_out=d_feat, d_hid=d_hid)
-nn_feat = nn_framework.NNvgg()
+nn_feat = nn_framework.NNvgg(d_in=3, d_out=d_feat)
 nn_class = nn.Conv2d(d_feat, 1, kernel_size=(1, 1), bias=False)
 
 ### nn for coord model
@@ -141,8 +141,8 @@ opt = torch.optim.Adam(param, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_de
 
 inp = df_sub.clone()
 
-noise = torch.randn(n_noise, 3, height, width).sigmoid()
-# noise = df_all2[:n_noise].clone()
+# noise = torch.randn(n_noise, 3, height, width).sigmoid()
+noise = df_all2[:n_noise].clone()
 
 if use_gpu:
     inp = inp.cuda()
@@ -198,10 +198,10 @@ while n < n_iter:
 
     # coord model
 
-    # coord = nn_coord(feat).sigmoid() # size n * 2 * h * w
-    # img_c = nn_gen(coord).sigmoid() # size n * 3 * h * w
+    coord = nn_coord(feat).sigmoid() # size n * 2 * h * w
+    img_c = nn_gen(coord).sigmoid() # size n * 3 * h * w
 
-    # l = l + ((img_c - inp).pow(2).mean(dim=1) * (out_class.squeeze().sigmoid())).mean()
+    l = l + ((img_c - inp).pow(2).mean(dim=1) * (out_class.squeeze().sigmoid())).mean()
 
     opt.zero_grad()
     l.backward()
@@ -230,11 +230,11 @@ fig, axs = plt.subplots(nrows=3, ncols=10, figsize=(16, 16))
 
 up = nn.Upsample(size=(height, width))
 
+res_all = up(out_class.detach())
 for i in range(n_total):
     # res = nn_class(feat[i]).squeeze().detach()
-    res = out_class[i].detach().squeeze()
+    res = res_all[i].squeeze()
     res = (res - res.min()) / (res.max() - res.min())
-    res = up(res)
     if use_gpu:
         res = res.cpu()
     axs[i // 10, i % 10].imshow(res.numpy())
@@ -246,10 +246,10 @@ fig_test, axs_test = plt.subplots(ncols=n_test, figsize=(16, 8))
 
 feat_test = nn_feat(df_test) # size n * d_feat * h * w
 out_class_test = nn_class(feat_test) # size n * 1 * h * w
+res_test_all = up(out_class_test.detach())
 for i in range(n_test):
-    res_test = out_class_test[i].detach().squeeze()
+    res_test = res_test_all[i].squeeze()
     res_test = (res_test - res_test.min()) / (res_test.max() - res_test.min())
-    res_test = up(res_test)
     if use_gpu:
         res_test = res_test.cpu()
     axs_test[i].imshow(res_test.numpy())

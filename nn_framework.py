@@ -3060,15 +3060,15 @@ class NNconv5_3(nn.Module):
     def __init__(self, d_in, d_out, d_hid, size=3):
         super().__init__()
         self.flow = nn.Sequential(nn.Conv2d(d_in, d_hid, kernel_size=size, padding='same'),
-                                  nn.ReLU(),
+                                  nn.ReLU(inplace=True),
                                   nn.Conv2d(d_hid, d_hid, kernel_size=size, padding='same'), # conv1
-                                  nn.ReLU(),
+                                  nn.ReLU(inplace=True),
                                   nn.Conv2d(d_hid, d_hid, kernel_size=size, padding='same'), # conv2
-                                  nn.ReLU(),
+                                  nn.ReLU(inplace=True),
                                   nn.Conv2d(d_hid, d_hid, kernel_size=size, padding='same'), # conv3
-                                  nn.ReLU(),
+                                  nn.ReLU(inplace=True),
                                   nn.Conv2d(d_hid, d_hid, kernel_size=size, padding='same'), # conv4
-                                  nn.ReLU(),
+                                  nn.ReLU(inplace=True),
                                   nn.Conv2d(d_hid, d_out, kernel_size=size, padding='same')) # conv5
 
     def forward(self, x):
@@ -3076,9 +3076,9 @@ class NNconv5_3(nn.Module):
 
 class NNvgg(nn.Module):
 
-    def __init__(self):
+    def __init__(self, d_in=3, d_out=512):
         super().__init__()
-        self.flow = nn.Sequential(nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 0
+        self.flow = nn.Sequential(nn.Conv2d(d_in, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 0
                                   nn.ReLU(inplace=True), # 1
                                   nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 2
                                   nn.ReLU(inplace=False), # 3
@@ -3112,10 +3112,10 @@ class NNvgg(nn.Module):
                                   nn.ReLU(inplace=True), # 31
                                   nn.Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 32
                                   nn.ReLU(inplace=True), # 33
-                                  nn.Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), # 34
-                                  nn.ReLU(inplace=True), # 35
-                                  nn.MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False), # 36
-                                  nn.AdaptiveAvgPool2d(output_size=(7, 7)))
+                                  nn.Conv2d(512, d_out, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))) # 34
+                                  # nn.ReLU(inplace=True), # 35
+                                  # nn.MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False), # 36
+                                  # nn.AdaptiveAvgPool2d(output_size=(13, 13)))
 
     def forward(self, x):
         return self.flow(x.float())
