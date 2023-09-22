@@ -17,3 +17,5 @@ data/CIFAR10/cifar-10-batches-py/batches.meta
 *.bak
 *.txt
 *.jpg
+.spyproject/
+__pycache__/
